@@ -1,5 +1,5 @@
 import streamlit as st
-from langchain_community.vectorstores import Chroma
+from langchain.vectorstores import FAISS
 from langchain_openai import OpenAIEmbeddings
 from langchain.chains import RetrievalQA
 from langchain.chat_models import ChatOpenAI
@@ -15,11 +15,9 @@ st.title("🔥 Firebot: FDNY Study Assistant")
 query = st.text_input("Ask a question about FDNY protocols, exams, or SOPs:")
 
 if query:
-    # Load FDNY docs into memory only
+    # Load and embed FDNY docs into memory using FAISS
     chunks = load_fdny_pdfs("fire_docs/")
-
-    # Build vectorstore in memory (no persist)
-    db = Chroma.from_documents(
+    db = FAISS.from_documents(
         documents=chunks,
         embedding=OpenAIEmbeddings(openai_api_key=os.getenv("OPENAI_API_KEY"))
     )
@@ -45,4 +43,6 @@ if query:
         st.markdown("**Sources:**")
         for src in sources:
             st.markdown(f"- {src}")
+
+
 
