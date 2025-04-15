@@ -8,6 +8,7 @@ import os
 from load_docs import load_fdny_pdfs
 
 load_dotenv()
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
 st.set_page_config(page_title="Firebot", page_icon="🔥")
 st.title("🔥 Firebot: FDNY Study Assistant")
@@ -15,16 +16,18 @@ st.title("🔥 Firebot: FDNY Study Assistant")
 query = st.text_input("Ask a question about FDNY protocols, exams, or SOPs:")
 
 if query:
-    # Load and embed FDNY docs into memory using FAISS
     chunks = load_fdny_pdfs("fire_docs/")
+    
+    embeddings = OpenAIEmbeddings(openai_api_key=OPENAI_API_KEY)
+
     db = FAISS.from_documents(
         documents=chunks,
-        embedding=OpenAIEmbeddings(openai_api_key=os.getenv("OPENAI_API_KEY"))
+        embedding=embeddings
     )
 
     retriever = db.as_retriever()
     qa = RetrievalQA.from_chain_type(
-        llm=ChatOpenAI(model_name="gpt-3.5-turbo", api_key=os.getenv("OPENAI_API_KEY")),
+        llm=ChatOpenAI(model_name="gpt-3.5-turbo", api_key=OPENAI_API_KEY),
         chain_type="stuff",
         retriever=retriever,
         return_source_documents=True
@@ -43,6 +46,7 @@ if query:
         st.markdown("**Sources:**")
         for src in sources:
             st.markdown(f"- {src}")
+
 
 
 
