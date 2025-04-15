@@ -5,6 +5,7 @@ from langchain.chains import RetrievalQA
 from langchain.chat_models import ChatOpenAI
 from dotenv import load_dotenv
 import os
+from load_docs import load_fdny_pdfs
 
 load_dotenv()
 
@@ -14,10 +15,15 @@ st.title("🔥 Firebot: FDNY Study Assistant")
 query = st.text_input("Ask a question about FDNY protocols, exams, or SOPs:")
 
 if query:
-    db = Chroma(
-        persist_directory="chroma_db",
-        embedding_function=OpenAIEmbeddings(openai_api_key=os.getenv("OPENAI_API_KEY"))
+    # Load FDNY docs into memory only
+    chunks = load_fdny_pdfs("fire_docs/")
+
+    # Build vectorstore in memory (no persist)
+    db = Chroma.from_documents(
+        documents=chunks,
+        embedding=OpenAIEmbeddings(openai_api_key=os.getenv("OPENAI_API_KEY"))
     )
+
     retriever = db.as_retriever()
     qa = RetrievalQA.from_chain_type(
         llm=ChatOpenAI(model_name="gpt-3.5-turbo", api_key=os.getenv("OPENAI_API_KEY")),
@@ -39,3 +45,4 @@ if query:
         st.markdown("**Sources:**")
         for src in sources:
             st.markdown(f"- {src}")
+
