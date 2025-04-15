@@ -17,6 +17,10 @@ query = st.text_input("Ask a question about FDNY protocols, exams, or SOPs:")
 
 if query:
     chunks = load_fdny_pdfs("fire_docs/")
+    st.write(f"✅ Loaded {len(chunks)} chunks from PDF")
+if len(chunks) == 0:
+    st.error("⚠️ No content was extracted from the PDFs. Check that your fire_docs folder is present and contains readable PDFs.")
+
     
     embeddings = OpenAIEmbeddings(openai_api_key=OPENAI_API_KEY)
 
