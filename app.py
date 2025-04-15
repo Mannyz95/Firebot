@@ -16,40 +16,47 @@ st.title("🔥 Firebot: FDNY Study Assistant")
 query = st.text_input("Ask a question about FDNY protocols, exams, or SOPs:")
 
 if query:
-    chunks = load_fdny_pdfs("fire_docs/")
-    st.write(f"✅ Loaded {len(chunks)} chunks from PDF")
-if len(chunks) == 0:
-    st.error("⚠️ No content was extracted from the PDFs. Check that your fire_docs folder is present and contains readable PDFs.")
+    try:
+        chunks = load_fdny_pdfs("fire_docs/")
+        st.write(f"📦 Loaded {len(chunks)} chunks from PDF files.")
 
-    
-    embeddings = OpenAIEmbeddings(openai_api_key=OPENAI_API_KEY)
+        if len(chunks) == 0:
+            st.error("⚠️ No content was extracted from the PDFs.")
+            st.stop()
 
-    db = FAISS.from_documents(
-        documents=chunks,
-        embedding=embeddings
-    )
+        embeddings = OpenAIEmbeddings(openai_api_key=OPENAI_API_KEY)
 
-    retriever = db.as_retriever()
-    qa = RetrievalQA.from_chain_type(
-        llm=ChatOpenAI(model_name="gpt-3.5-turbo", api_key=OPENAI_API_KEY),
-        chain_type="stuff",
-        retriever=retriever,
-        return_source_documents=True
-    )
+        db = FAISS.from_documents(
+            documents=chunks,
+            embedding=embeddings
+        )
 
-    result = qa(query)
-    st.write(result["result"])
+        retriever = db.as_retriever()
+        qa = RetrievalQA.from_chain_type(
+            llm=ChatOpenAI(model_name="gpt-3.5-turbo", api_key=OPENAI_API_KEY),
+            chain_type="stuff",
+            retriever=retriever,
+            return_source_documents=True
+        )
 
-    sources = set()
-    for doc in result["source_documents"]:
-        filename = doc.metadata.get("source", "unknown")
-        page = doc.metadata.get("page", "??")
-        sources.add(f"{filename}, page {page}")
+        result = qa(query)
+        st.write(result["result"])
 
-    if sources:
-        st.markdown("**Sources:**")
-        for src in sources:
-            st.markdown(f"- {src}")
+        sources = set()
+        for doc in result["source_documents"]:
+            filename = doc.metadata.get("source", "unknown")
+            page = doc.metadata.get("page", "??")
+            sources.add(f"{filename}, page {page}")
+
+        if sources:
+            st.markdown("**Sources:**")
+            for src in sources:
+                st.markdown(f"- {src}")
+
+    except Exception as e:
+        st.error(f"🚨 Failed to load or process PDFs: {e}")
+        st.stop()
+
 
 
 
