@@ -93,14 +93,10 @@ DOC_CATEGORIES = {
       
 }
 
-import os
-import gdown
-import tempfile
-from langchain_community.document_loaders import PyMuPDFLoader
-from langchain.text_splitter import RecursiveCharacterTextSplitter
+
 
 def normalize_drive_url(url):
-    # Handles both "file/d/..." and "open?id=..." formats
+    """Convert Google Drive view link to direct download link."""
     if "id=" in url:
         return url
     elif "file/d/" in url:
@@ -110,12 +106,17 @@ def normalize_drive_url(url):
         raise ValueError(f"❌ Unrecognized URL format: {url}")
 
 def load_fdny_pdfs(categories=None):
-    from load_docs import DOC_CATEGORIES  # Make sure this exists
-
+    """
+    Downloads and splits PDFs from the provided categories into text chunks.
+    Returns: List of document chunks.
+    """
     selected_links = []
     if categories:
         for cat in categories:
-            selected_links.extend(DOC_CATEGORIES.get(cat, []))
+            if cat not in DOC_CATEGORIES:
+                print(f"⚠️ Category '{cat}' not found in DOC_CATEGORIES.")
+                continue
+            selected_links.extend(DOC_CATEGORIES[cat])
     else:
         for links in DOC_CATEGORIES.values():
             selected_links.extend(links)
@@ -126,7 +127,7 @@ def load_fdny_pdfs(categories=None):
     for raw_url in selected_links:
         try:
             url = normalize_drive_url(raw_url)
-            filename = url.split("=")[-1] + ".pdf"
+            filename = url.split("id=")[-1] + ".pdf"
             output = os.path.join(temp_dir, filename)
 
             print(f"⬇️ Downloading: {url}")
@@ -134,17 +135,19 @@ def load_fdny_pdfs(categories=None):
 
             loader = PyMuPDFLoader(output)
             docs = loader.load()
+
             if not docs:
-                print(f"⚠️ No docs loaded from: {filename}")
+                print(f"⚠️ No text found in: {filename}")
                 continue
 
             splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=150)
             chunks = splitter.split_documents(docs)
-            print(f"✅ Loaded {len(chunks)} chunks from: {filename}")
+
+            print(f"✅ {filename}: {len(chunks)} chunks")
             all_chunks.extend(chunks)
 
         except Exception as e:
-            print(f"❌ Failed to load: {raw_url}\n   Error: {e}")
+            print(f"❌ Failed to process {raw_url}: {e}")
 
     print(f"📦 Total chunks loaded: {len(all_chunks)}")
     return all_chunks
