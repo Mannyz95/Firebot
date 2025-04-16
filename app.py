@@ -7,6 +7,7 @@ from dotenv import load_dotenv
 import os
 from load_docs import load_fdny_pdfs, DOC_CATEGORIES
 import random
+import re 
 
 load_dotenv()
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
@@ -78,87 +79,68 @@ if mode == "Ask a question":
             st.stop()
 
 elif mode == "Give me a quiz":
-    st.write("🧠 Generating a multiple-choice quiz...")
+    st.subheader("🧠 Take a 10-question FDNY Quiz")
 
-    selected_topics = st.multiselect(
-        "📚 Select one or more topics for your quiz:",
-        options=list(DOC_CATEGORIES.keys()),
-        default=list(DOC_CATEGORIES.keys())[:1]  # Select first one by default
-    )
+    selected_topics = st.multiselect("📚 Select one or more topics:", list(DOC_CATEGORIES.keys()))
 
     if not selected_topics:
-        st.warning("☝️ Please select at least one topic.")
+        st.warning("Please select at least one topic to generate quiz questions.")
         st.stop()
 
-    if not st.session_state.quiz_questions:
-        try:
-            chunks = load_fdny_pdfs(categories=selected_topics)
-            st.write(f"📦 Loaded {len(chunks)} chunks from selected categories.")
+    chunks = load_fdny_pdfs(categories=selected_topics)
+    st.write(f"📦 Loaded {len(chunks)} chunks from selected categories.")
 
-            embeddings = OpenAIEmbeddings(openai_api_key=OPENAI_API_KEY)
-            db = FAISS.from_documents(chunks, embedding=embeddings)
+    if not chunks:
+        st.error("🚨 No documents were loaded from the selected categories.")
+        st.stop()
 
-            retriever = db.as_retriever()
+    embeddings = OpenAIEmbeddings(openai_api_key=OPENAI_API_KEY)
+    db = FAISS.from_documents(chunks, embedding=embeddings)
 
-            qa = RetrievalQA.from_chain_type(
-                llm=ChatOpenAI(model_name="gpt-3.5-turbo", api_key=OPENAI_API_KEY),
-                chain_type="stuff",
-                retriever=retriever
-            )
+    retriever = db.as_retriever()
+    qa = RetrievalQA.from_chain_type(
+        llm=ChatOpenAI(model_name="gpt-3.5-turbo", api_key=OPENAI_API_KEY),
+        chain_type="stuff",
+        retriever=retriever
+    )
 
-            # Generate 10 questions
-            for _ in range(10):
-                quiz_prompt = (
-                    "Create one multiple choice quiz question based on FDNY procedures, SOPs, or fireground tactics. "
-                    "Format it like:\n"
-                    "Question: <question text>\n"
-                    "1. Option A\n"
-                    "2. Option B\n"
-                    "3. Option C\n"
-                    "4. Option D\n"
-                    "Correct Answer: <number of correct option>"
-                )
-                quiz = qa.run(quiz_prompt)
-                st.session_state.quiz_questions.append(quiz)
+    quiz_prompt = """
+    Generate 10 multiple-choice questions based on FDNY procedures and SOPs.
+    Format like:
+    1. Question?
+    A) ...
+    B) ...
+    C) ...
+    D) ...
+    Correct Answer: X
+    """
 
-        except Exception as e:
-            st.error(f"🚨 Failed to load or process PDFs:\n\n{str(e)}")
-            st.stop()
+    quiz_text = qa.run(quiz_prompt)
 
-    if st.session_state.current_question < len(st.session_state.quiz_questions):
-        question = st.session_state.quiz_questions[st.session_state.current_question]
-        st.markdown(f"### Question {st.session_state.current_question + 1}")
-        st.write(question)
+    st.markdown("### 📋 Quiz")
+    
+    questions = re.split(r"\n(?=\d+\.)", quiz_text.strip())
 
-        options = ["1", "2", "3", "4"]
-        st.session_state.selected_option = st.radio("Select your answer:", options)
+    for q in questions:
+        match = re.match(r"\d+\.\s*(.*?)\nA\)(.*?)\nB\)(.*?)\nC\)(.*?)\nD\)(.*?)\nCorrect Answer: ([ABCD])", q, re.DOTALL)
+        if not match:
+            st.warning("⚠️ Question format was not understood.")
+            st.text(q)
+            continue
 
-        if st.button("Submit Answer"):
-            # Extract the correct answer from the question text
-            correct_answer_line = [line for line in question.split('\n') if "Correct Answer:" in line]
-            if correct_answer_line:
-                correct_answer = correct_answer_line[0].split("Correct Answer:")[1].strip()
-                if st.session_state.selected_option == correct_answer:
-                    st.success("✅ Correct!")
-                    st.session_state.score += 1
-                else:
-                    st.error(f"❌ Incorrect. The correct answer was: {correct_answer}")
-            else:
-                st.warning("⚠️ Could not determine the correct answer.")
+        question_text, a, b, c, d, correct = match.groups()
+        user_answer = st.radio(
+            question_text.strip(),
+            [f"A) {a.strip()}", f"B) {b.strip()}", f"C) {c.strip()}", f"D) {d.strip()}"],
+            key=question_text
+        )
 
-            st.session_state.current_question += 1
-            st.session_state.selected_option = None
-            st.experimental_rerun()
-    else:
-        st.markdown("### 🎉 Quiz Completed!")
-        st.write(f"Your final score is: {st.session_state.score} out of {len(st.session_state.quiz_questions)}")
+        if user_answer.startswith(correct):
+            st.success("✅ You got it right!")
+        else:
+            st.error(f"❌ Nope. The correct answer was: {correct})")
 
-        if st.button("Restart Quiz"):
-            st.session_state.quiz_questions = []
-            st.session_state.current_question = 0
-            st.session_state.score = 0
-            st.session_state.selected_option = None
-            st.experimental_rerun()
+        st.markdown("---")
 
 
 
