@@ -7,7 +7,8 @@ from dotenv import load_dotenv
 import os
 from load_docs import load_fdny_pdfs, DOC_CATEGORIES
 import random
-import re 
+import re
+import uuid  
 
 load_dotenv()
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
@@ -87,60 +88,80 @@ elif mode == "Give me a quiz":
         st.warning("Please select at least one topic to generate quiz questions.")
         st.stop()
 
-    chunks = load_fdny_pdfs(categories=selected_topics)
-    st.write(f"📦 Loaded {len(chunks)} chunks from selected categories.")
+    # Only regenerate questions if empty or user resets
+    if not st.session_state.quiz_questions:
+        chunks = load_fdny_pdfs(categories=selected_topics)
+        st.write(f"📦 Loaded {len(chunks)} chunks from selected categories.")
 
-    if not chunks:
-        st.error("🚨 No documents were loaded from the selected categories.")
-        st.stop()
+        if not chunks:
+            st.error("🚨 No documents were loaded from the selected categories.")
+            st.stop()
 
-    embeddings = OpenAIEmbeddings(openai_api_key=OPENAI_API_KEY)
-    db = FAISS.from_documents(chunks, embedding=embeddings)
+        embeddings = OpenAIEmbeddings(openai_api_key=OPENAI_API_KEY)
+        db = FAISS.from_documents(chunks, embedding=embeddings)
 
-    retriever = db.as_retriever()
-    qa = RetrievalQA.from_chain_type(
-        llm=ChatOpenAI(model_name="gpt-3.5-turbo", api_key=OPENAI_API_KEY),
-        chain_type="stuff",
-        retriever=retriever
-    )
-
-    quiz_prompt = """
-    Generate 10 multiple-choice questions based on FDNY procedures and SOPs.
-    Format like:
-    1. Question?
-    A) ...
-    B) ...
-    C) ...
-    D) ...
-    Correct Answer: X
-    """
-
-    quiz_text = qa.run(quiz_prompt)
-
-    st.markdown("### 📋 Quiz")
-    
-    questions = re.split(r"\n(?=\d+\.)", quiz_text.strip())
-
-    for q in questions:
-        match = re.match(r"\d+\.\s*(.*?)\nA\)(.*?)\nB\)(.*?)\nC\)(.*?)\nD\)(.*?)\nCorrect Answer: ([ABCD])", q, re.DOTALL)
-        if not match:
-            st.warning("⚠️ Question format was not understood.")
-            st.text(q)
-            continue
-
-        question_text, a, b, c, d, correct = match.groups()
-        user_answer = st.radio(
-            question_text.strip(),
-            [f"A) {a.strip()}", f"B) {b.strip()}", f"C) {c.strip()}", f"D) {d.strip()}"],
-            key=question_text
+        retriever = db.as_retriever()
+        qa = RetrievalQA.from_chain_type(
+            llm=ChatOpenAI(model_name="gpt-3.5-turbo", api_key=OPENAI_API_KEY),
+            chain_type="stuff",
+            retriever=retriever
         )
 
-        if user_answer.startswith(correct):
-            st.success("✅ You got it right!")
-        else:
-            st.error(f"❌ Nope. The correct answer was: {correct})")
+        quiz_prompt = """
+        Generate 10 multiple-choice questions based on FDNY procedures and SOPs.
+        Each question should follow this format:
+        1. Question?
+        A) ...
+        B) ...
+        C) ...
+        D) ...
+        Correct Answer: X
+        """
+
+        quiz_text = qa.run(quiz_prompt)
+        raw_questions = re.split(r"\n(?=\d+\.)", quiz_text.strip())
+
+        for q in raw_questions:
+            match = re.match(
+                r"\d+\.\s*(.*?)\nA\)(.*?)\nB\)(.*?)\nC\)(.*?)\nD\)(.*?)\nCorrect Answer:\s*([ABCD])",
+                q.strip(), re.DOTALL
+            )
+            if match:
+                question_text, a, b, c, d, correct = match.groups()
+                st.session_state.quiz_questions.append({
+                    "question": question_text.strip(),
+                    "options": {
+                        "A": a.strip(),
+                        "B": b.strip(),
+                        "C": c.strip(),
+                        "D": d.strip()
+                    },
+                    "correct": correct
+                })
+
+    st.markdown("### 📋 Quiz Time!")
+
+    for i, q in enumerate(st.session_state.quiz_questions):
+        st.markdown(f"**{i+1}. {q['question']}**")
+        user_choice = st.radio(
+            label="",
+            options=[f"A) {q['options']['A']}", f"B) {q['options']['B']}", f"C) {q['options']['C']}", f"D) {q['options']['D']}"],
+            key=f"q_{i}_choice"
+        )
+
+        if st.button(f"Reveal Answer {i+1}", key=f"reveal_{i}"):
+            user_letter = user_choice[0]
+            if user_letter == q["correct"]:
+                st.success(f"✅ Correct! The answer is {q['correct']}) {q['options'][q['correct']]}")
+            else:
+                st.error(f"❌ Incorrect. You chose {user_letter}) but the correct answer is {q['correct']}) {q['options'][q['correct']]}")
 
         st.markdown("---")
+
+    if st.button("🔁 Reset Quiz"):
+        st.session_state.quiz_questions = []
+        st.experimental_rerun()
+
 
 
 
