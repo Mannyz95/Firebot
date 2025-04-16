@@ -53,16 +53,65 @@ DOC_CATEGORIES = {
     ],
     # Just a placeholder for other categories
     "Ladder Operations": [
-        "https://drive.google.com/uc?id=1WV2sdHoIU_AI0IdGkQ_KI_ePw81hwfpI",
-        # Add more here
+        
+    "https://drive.google.com/uc?id=1WV2sdHoIU_AI0IdGkQ_KI_ePw81hwfpI",
+    "https://drive.google.com/uc?id=1Qdm_GSRX1b3QTdHawmd-yvPrvTPTEjf0",
+    "https://drive.google.com/uc?id=1lIW4RNoWcNCZ3b2AoQgvayzTToi2ScmC",
+    "https://drive.google.com/uc?id=19OtGU2KmJNFajkXm2J3DWXrtWeU_hcLL",
+    "https://drive.google.com/uc?id=19WnxbQTwG94Khtmb0ljP-GHf9vW4iCIb",
+    "https://drive.google.com/uc?id=1hrH6vCRrxGkbgas-x-lono83k7Zm38Nj",
+    "https://drive.google.com/uc?id=1AuXutLNahySaD8H__qkZAHgCJVPIh1Km",
+    "https://drive.google.com/uc?id=1TuZz-5MHuYkzilJxlmr7CvlpVmglmrnl",
+    "https://drive.google.com/uc?id=1vzRcRBEVMP6bzo-iaI9TwbowcIINsUGJ",
+    "https://drive.google.com/uc?id=1Y7o9w_0Wn-VxUsJkqsNUxMgk29TcfHPJ",
+    "https://drive.google.com/uc?id=1vvV8JUBIPQKFNV1kBmqn_EV9_jpP_uG6",
+    "https://drive.google.com/uc?id=1C52gLFLVffc8tXTRMNmNib0N8Mm_kr1C"
+,
     ],
     "Engine Operations": [
         "https://drive.google.com/uc?id=1TQVcN_E4z_GzWEae3tTTt6L8mK9lXku5",
-        # Add more here
-    ]
+    "https://drive.google.com/uc?id=17N7vfJ487bTYo2vWvAWhW4z9JVbp9Xxk",
+    "https://drive.google.com/uc?id=1L8uJZCNq80duzQUNuk5EHh7yu89SJ_Xj",
+    "https://drive.google.com/uc?id=1ttXDyltMpk_WCy8O3HCAOi8DhYHVLez1",
+    "https://drive.google.com/uc?id=19HNDub1pevjLNlB2XIUqTcpvViwcAfXt",
+    "https://drive.google.com/uc?id=19yNYqpCRJtbp2W7cGBAPfK4pG3uWrnkL",
+    "https://drive.google.com/uc?id=1nvls7Pa5r9CCU_0D4oz2yaUhxJinoX1U",
+    "https://drive.google.com/uc?id=1j4iQdVsQRaesF3ko55vANlH3r6YZhoW8",
+    "https://drive.google.com/uc?id=1KEYz68jXQHKzNpgThd4Hm3s_dyAZgTXm",
+    "https://drive.google.com/uc?id=1jZ_oSkmaVauiYzMwxv2_mQFeadhKlIzI",
+    "https://drive.google.com/uc?id=1VQMgo4TL0wd4xfUj-9vYw3XUQ2w2d8Hr",
+    "https://drive.google.com/uc?id=1f5XlYj8ynFFiXMDr2pWFINU5NfPgAOmH",
+    "https://drive.google.com/uc?id=1z58ih3DTLFD6C6hluNx3_Md_GoIfyQt4",
+    "https://drive.google.com/uc?id=1yJuOIe2DD1ho_JwoFSWnaUlVu9xGbEuv",
+    "https://drive.google.com/uc?id=1IpTyX71gW6PJvKaFOewqyDuybgGyEEX7",
+    "https://drive.google.com/uc?id=1SZUzBEfg14o6_QnQCmHvVRd1iR3RcwaH",
+    "https://drive.google.com/uc?id=1l4Ot14JZo2G7kMmSR8HDSqEx4O6QAJXZ",
+    "https://drive.google.com/uc?id=1KH2C6Jt47TKbN_LTvYZl0ckW07uaT-8P",
+    "https://drive.google.com/uc?id=1_dZa0DQzfkUSuemktMkhn43NdU_-C0CM",
+    "https://drive.google.com/uc?id=1jRJxdivhTsF9e6FMpmWyK3E4KYGdiIGV"
+    ],
+      
 }
 
+import os
+import gdown
+import tempfile
+from langchain_community.document_loaders import PyMuPDFLoader
+from langchain.text_splitter import RecursiveCharacterTextSplitter
+
+def normalize_drive_url(url):
+    # Handles both "file/d/..." and "open?id=..." formats
+    if "id=" in url:
+        return url
+    elif "file/d/" in url:
+        file_id = url.split("/file/d/")[1].split("/")[0]
+        return f"https://drive.google.com/uc?id={file_id}"
+    else:
+        raise ValueError(f"❌ Unrecognized URL format: {url}")
+
 def load_fdny_pdfs(categories=None):
+    from load_docs import DOC_CATEGORIES  # Make sure this exists
+
     selected_links = []
     if categories:
         for cat in categories:
@@ -74,20 +123,32 @@ def load_fdny_pdfs(categories=None):
     temp_dir = tempfile.mkdtemp()
     all_chunks = []
 
-    for url in selected_links:
+    for raw_url in selected_links:
         try:
-            output = os.path.join(temp_dir, url.split("=")[-1] + ".pdf")
+            url = normalize_drive_url(raw_url)
+            filename = url.split("=")[-1] + ".pdf"
+            output = os.path.join(temp_dir, filename)
+
+            print(f"⬇️ Downloading: {url}")
             gdown.download(url, output, quiet=True)
+
             loader = PyMuPDFLoader(output)
             docs = loader.load()
+            if not docs:
+                print(f"⚠️ No docs loaded from: {filename}")
+                continue
 
             splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=150)
             chunks = splitter.split_documents(docs)
+            print(f"✅ Loaded {len(chunks)} chunks from: {filename}")
             all_chunks.extend(chunks)
-        except Exception as e:
-            print(f"❌ Failed to load: {url} | Error: {e}")
 
+        except Exception as e:
+            print(f"❌ Failed to load: {raw_url}\n   Error: {e}")
+
+    print(f"📦 Total chunks loaded: {len(all_chunks)}")
     return all_chunks
+
 
 
 
