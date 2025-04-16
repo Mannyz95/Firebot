@@ -1,5 +1,5 @@
 import streamlit as st
-from langchain.vectorstores import FAISS
+from langchain_community.vectorstores import FAISS
 from langchain_openai import OpenAIEmbeddings
 from langchain.chains import RetrievalQA
 from langchain.chat_models import ChatOpenAI
@@ -17,7 +17,9 @@ query = st.text_input("Ask a question about FDNY protocols, exams, or SOPs:")
 
 if query:
     try:
-        chunks = load_fdny_pdfs("fire_docs/")
+        st.write("📄 Downloading and loading FDNY PDFs...")
+        chunks = load_fdny_pdfs()
+
         st.write(f"📦 Loaded {len(chunks)} chunks from PDF files.")
 
         if len(chunks) == 0:
@@ -40,6 +42,7 @@ if query:
         )
 
         result = qa(query)
+        st.markdown("### 💬 Answer:")
         st.write(result["result"])
 
         sources = set()
@@ -49,13 +52,15 @@ if query:
             sources.add(f"{filename}, page {page}")
 
         if sources:
-            st.markdown("**Sources:**")
+            st.markdown("### 📚 Sources:")
             for src in sources:
                 st.markdown(f"- {src}")
 
     except Exception as e:
-        st.error(f"🚨 Failed to load or process PDFs: {e}")
+        st.error(f"🚨 Failed to load or process PDFs:\n\n{str(e)}")
         st.stop()
+
+
 
 
 

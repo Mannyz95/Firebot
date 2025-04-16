@@ -3,3 +3,6 @@ venv/
 __pycache__/
 chroma_db/
 *.DS_Store
+fire_docs/
+temp_docs/
+
