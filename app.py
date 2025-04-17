@@ -8,7 +8,30 @@ import os
 from load_docs import load_fdny_pdfs, DOC_CATEGORIES
 import random
 import re
-import uuid  
+import uuid
+import hashlib
+import pickle
+import streamlit as st
+
+@st.cache_resource(show_spinner="⚙️ Caching FAISS vectorstore...")
+def get_cached_vectorstore(chunks, api_key):
+    # Generate a unique hash for the current set of chunks
+    combined_text = ''.join([doc.page_content for doc in chunks])
+    hash_key = hashlib.sha256(combined_text.encode()).hexdigest()
+
+    # Use the hash to store/retrieve FAISS DB
+    if 'faiss_cache' not in st.session_state:
+        st.session_state.faiss_cache = {}
+
+    if hash_key in st.session_state.faiss_cache:
+        return st.session_state.faiss_cache[hash_key]
+
+    # Otherwise, generate new vectorstore
+    embeddings = OpenAIEmbeddings(openai_api_key=api_key)
+    db = FAISS.from_documents(chunks, embedding=embeddings)
+    st.session_state.faiss_cache[hash_key] = db
+    return db
+
 
 load_dotenv()
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
@@ -97,8 +120,8 @@ elif mode == "Give me a quiz":
             st.error("🚨 No documents were loaded from the selected categories.")
             st.stop()
 
-        embeddings = OpenAIEmbeddings(openai_api_key=OPENAI_API_KEY)
-        db = FAISS.from_documents(chunks, embedding=embeddings)
+        db = get_cached_vectorstore(chunks, api_key=OPENAI_API_KEY)
+
 
         retriever = db.as_retriever()
         qa = RetrievalQA.from_chain_type(
